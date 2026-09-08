@@ -173,7 +173,8 @@ ana_window=[0.05 0.3];
         xticks([0.75 2.25])
         xticklabels({'PF' 'CF'});
         xlim([0 3])
-        ylim([0 1.1])
+        ylim([0 1.15])
+        yticks([0:0.5:1])
         ylabel('Probability')
         set(gca,'FontSize',18)
         set(gcf,'color',[1 1 1])
@@ -237,7 +238,7 @@ ana_window=[0.05 0.3];
             'MarkerFaceColor',[.3 .3 .3],...
             'Color',[.3 .3 .3],...
             'LineWidth',3);
-        text([0.5 2.5],ymean+0.4,compose('%.2f', ymean),'FontSize',16,...
+        text([0.5 2.5],ymean+0.5,compose('%.2f', ymean),'FontSize',16,...
             'HorizontalAlignment','center',...
             'color',[0 0 0]);
 
@@ -278,6 +279,7 @@ ana_window=[0.05 0.3];
         xticks([0.75 2.25])
         xticklabels({'PF' 'CF'});
         xlim([0 3])
+        yticks([0:2.5:5])
         ylabel('Amplitude (\DeltaF/F)')
         set(gca,'FontSize',18)
         set(gcf,'color',[1 1 1])
@@ -290,6 +292,7 @@ ana_window=[0.05 0.3];
         %% Section 4: plotting the CV within "ana window" sec after stim
         LOCS=pksLOCS;
         amps=cell(size(condlist));
+        cellmean=cell(size(condlist));
         y=[];
         for cond=1:max(condlist)
             condidx=find(condlist==cond)';
@@ -339,13 +342,13 @@ ana_window=[0.05 0.3];
             'MarkerFaceColor',[.3 .3 .3],...
             'Color',[.3 .3 .3],...
             'LineWidth',3);
-        text([0.5 2.5],ymean+0.075,compose('%.2f', ymean),'FontSize',16,...
+        text([0.5 2.5],ymean+0.06,compose('%.2f', ymean),'FontSize',16,...
             'HorizontalAlignment','center',...
             'color',[0 0 0]);
 
         % stat
         [h,p] = ttest(y(1,:)',y(2,:)');
-        Ysig=1;Yincre=0.014.*1000;sigincre=0.02;
+        Ysig=0.58;Yincre=0.014.*1000;sigincre=0.02;
         sigidx=find(p<0.05 & p>=0.01)';
         if sigidx
             for sn=sigidx
@@ -380,7 +383,8 @@ ana_window=[0.05 0.3];
         xticks([0.75 2.25])
         xticklabels({'PF' 'CF'});
         xlim([0 3])
-        ylim([0 1.1])
+        yticks([0:0.3:1])
+        ylim([0 0.62])
         ylabel('CV of amp. (\DeltaF/F)')
         set(gca,'FontSize',18)
         set(gcf,'color',[1 1 1])
@@ -448,7 +452,7 @@ ana_window=[0.05 0.3];
 
         % stat
         [h,p] = ttest(y(1,:)',y(2,:)');
-        Ysig=0.265;Yincre=0.01;sigincre=0.003;
+        Ysig=0.263;Yincre=0.01;sigincre=0.003;
         sigidx=find(p<0.05 & p>=0.01)';
         if sigidx
             for sn=sigidx
@@ -485,7 +489,179 @@ ana_window=[0.05 0.3];
         xlim([0 3])
         ylim([0.125 0.275])
         yticks(0.15:0.05:0.25)
+        
         ylabel('Time to peak (sec)')
+        set(gca,'FontSize',18)
+        set(gcf,'color',[1 1 1])
+        figposition=get(gcf,'position');
+        figposition(3)=300;
+        set(gcf,'Position',figposition);
+    end
+
+    function FWHM(Marker)
+        %% Section 6: plotting the time to full width of half maximum
+        LOCS=pksLOCS;
+        amps=cell(size(condlist));
+        y=[];
+        for cond=1:max(condlist)
+            condidx=find(condlist==cond)';
+            for i=1:length(condidx)
+                idx=condidx(i);
+                T=time{idx}-time{idx}(data(idx).stim(1)+1);
+                for roi=1:size(LOCS{idx},2)
+                    activ=smoothBC_signal{idx}(:,roi,:);
+                    % full post-stimulus signal used for FWHM
+                    Tpost = T(T > 0);
+                    signal_post = activ(T > 0,:,:);
+
+                    % restricted window used ONLY to identify the peak
+                    peak_window_idx = Tpost > ana_window(1) & Tpost <= ana_window(2);
+
+                    ntrials = size(signal_post,3);
+                    duration = nan(ntrials,1);
+
+                    for trial = 1:ntrials
+
+                        trace = signal_post(:,1,trial);
+
+                        % -----------------------------------------
+                        % Find peak only within ana_window
+                        % -----------------------------------------
+                        trace_peakwindow = trace(peak_window_idx);
+
+                        [peak, localPeakIdx] = max(trace_peakwindow);
+
+                        % Convert index back to full T > 0 trace
+                        tmp = find(peak_window_idx);
+                        peakidx = tmp(localPeakIdx);
+
+                        halfmax = peak/2;
+
+                        % -----------------------------------------
+                        % Find LEFT half-max crossing
+                        % searching backward from selected peak
+                        % -----------------------------------------
+                        leftidx = find(trace(1:peakidx) < halfmax,1,'last');
+
+                        if isempty(leftidx) || leftidx >= peakidx
+                            continue
+                        end
+
+                        % interpolate crossing time
+                        t1 = Tpost(leftidx) + ...
+                            (halfmax-trace(leftidx)) / ...
+                            (trace(leftidx+1)-trace(leftidx)) * ...
+                            (Tpost(leftidx+1)-Tpost(leftidx));
+
+                        % -----------------------------------------
+                        % Find RIGHT half-max crossing
+                        % searching forward from selected peak
+                        % -----------------------------------------
+                        temp = find(trace(peakidx:end) < halfmax,1,'first');
+
+                        if isempty(temp)
+                            continue
+                        end
+
+                        rightidx = peakidx + temp - 1;
+
+                        if rightidx <= peakidx
+                            continue
+                        end
+
+                        % interpolate crossing time
+                        t2 = Tpost(rightidx-1) + ...
+                            (halfmax-trace(rightidx-1)) / ...
+                            (trace(rightidx)-trace(rightidx-1)) * ...
+                            (Tpost(rightidx)-Tpost(rightidx-1));
+
+                        % FWHM
+                        duration(trial) = t2 - t1;
+
+                    end
+
+                    amps{idx}{roi,1} = duration;
+                    cellmean{idx}{roi,1} = nanmean(amps{idx}{roi},1);
+                end
+            end
+            catmean=vertcat(cellmean{condidx});
+            y=cat(1,y,horzcat(catmean{:}));
+        end
+
+
+        figure
+        x=1:max(condlist);
+        yIDX=y(1,:)>0.3;
+        hold on
+        for n=1:size(y,2)
+            jitterx=x'+0.*rand(size(x'))
+            scatter(jitterx,y(:,n),50,...
+                'MarkerFaceColor','flat',...
+                'MarkerEdgeColor','flat',...
+                'MarkerFaceAlpha',0.2,...
+                'MarkerEdgeAlpha',0.2,...
+                'MarkerFaceColor',0.5*[1 1 1],...
+                'MarkerEdgeColor',0.5*[1 1 1]);
+            h=plot(jitterx,y(:,n),...
+                'color',[.5 .5 .5 .2],...
+                'LineWidth',1);
+            h.Color(4) = 1;
+        end
+
+        y_prob=y;
+        hold on
+        ymean=nanmean(y,2);
+        ystd=nanstd(y,0,2)./sqrt(size(y,2));
+        errorbar([0.5 2.5],ymean,ystd,'o',...
+            'CapSize',15,...
+            'MarkerSize',7,...
+            'MarkerFaceColor',[.3 .3 .3],...
+            'Color',[.3 .3 .3],...
+            'LineWidth',3);
+        text([0.5 2.5],ymean+0.05,compose('%.2f', ymean),'FontSize',16,...
+            'HorizontalAlignment','center',...
+            'color',[0 0 0]);
+
+        % stat
+        [h,p] = ttest(y(1,:)',y(2,:)');
+        Ysig=0.61;Yincre=0.01;sigincre=0.01;
+        sigidx=find(p<0.05 & p>=0.01)';
+        if sigidx
+            for sn=sigidx
+                plot(1:2,[Ysig Ysig],'color',[0 0 0],'linewidth',3)
+                text(mean(1:2),Ysig+sigincre,'*','FontSize',30,...
+                    'HorizontalAlignment','center',...
+                    'color',[0 0 0]);
+                Ysig=Ysig+Yincre;
+            end
+        end
+        sigidx=find(p<0.01 & p>=0.001)';
+        if sigidx
+            for sn=sigidx
+                plot(1:2,[Ysig Ysig],'color',[0 0 0],'linewidth',3)
+                text(mean(1:2),Ysig+sigincre,'**','FontSize',30,...
+                    'HorizontalAlignment','center',...
+                    'color',[0 0 0]);
+                Ysig=Ysig+Yincre;
+            end
+        end
+        sigidx=find(p<0.001)';
+        if sigidx
+            for sn=sigidx
+                plot(1:2,[Ysig Ysig],'color',[0 0 0],'linewidth',3)
+                text(mean(1:2),Ysig+sigincre,'***','FontSize',30,...
+                    'HorizontalAlignment','center',...
+                    'color',[0 0 0]);
+                Ysig=Ysig+Yincre;
+            end
+        end
+
+        xticks([0.75 2.25])
+        xticklabels({'PF' 'CF'});
+                xlim([0 3])
+                ylim([0.15 0.65])
+        yticks(0.2:0.2:1.2)
+        ylabel('FWHM (sec)')
         set(gca,'FontSize',18)
         set(gcf,'color',[1 1 1])
         figposition=get(gcf,'position');
