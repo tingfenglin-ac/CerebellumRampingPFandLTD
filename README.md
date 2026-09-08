@@ -1,4 +1,4 @@
-Code for the paper “Cerebellum violates Marr–Albus predictions to train synapses on long-term anticipatory goals” by Ting-Feng Lin and Christian Hansel.
+Code for the paper “Priming parallel fiber signals drive plasticity in the in vivo cerebellum” by Ting-Feng Lin and Christian Hansel.
 
 To reproduce the figures, open the scripts with filenames beginning with “Figure #” and follow the instructions provided in each script.
 
